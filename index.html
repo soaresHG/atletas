@@ -304,9 +304,9 @@
   </div>
 
   <script>
-    const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzLpEZYsWf1yGnDp3JhXTUz2UvgiKgC5G54YWc-PDlxrJUOxHnLAd06ggvBrZHepAB4sg/exec";
+    const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzd3OP6iUpV_zJGOkQwjOZU0EQ8JyEo1canWwlOZBFLFJ7V_MHBd9yHtG88ymLIxT5T7A/exec";
 
-    // --- TEMPOS EM QUE AS OPÇÕES DEVE APARECER NA TELA (EM SEGUNDOS) ---
+    // --- TEMPOS EM QUE AS OPÇÕES DEVEM APARECER NA TELA (EM SEGUNDOS) ---
     const perguntas = [
       {
         gatilho: 7.10, // 07seg06
@@ -363,6 +363,7 @@
     let pontuacao = 0;
     let acertos = 0;
     let perguntaAtual = 0;
+    let erros = []; // Guarda os números das perguntas em que houve erro
     const PONTOS_POR_ACERTO = 10;
 
     const TEMPO_LIMITE = 10; // As opções duram 10s na tela
@@ -434,6 +435,7 @@
       pontuacao = 0;
       acertos = 0;
       perguntaAtual = 0;
+      erros = [];
 
       document.getElementById('displayName').innerText = nomeAtleta;
       document.getElementById('displayScore').innerText = pontuacao;
@@ -451,7 +453,7 @@
       if (perguntaAtual < perguntas.length && !aguardandoResposta) {
         const pAtual = perguntas[perguntaAtual];
         if (player.currentTime >= pAtual.gatilho) {
-          iniciarFaseDecisao(); // Exibe as opções, mas NÃO chama player.pause()
+          iniciarFaseDecisao();
         }
       }
     });
@@ -510,6 +512,9 @@
         feedback.className = "feedback-banner feedback-correct";
         feedback.innerText = "Excelente Decisão!";
       } else {
+        // Registra a pergunta onde o atleta errou
+        erros.push(`Pergunta ${perguntaAtual + 1}`);
+
         feedback.className = "feedback-banner feedback-wrong";
         const motivo = tempoRestante <= 0 ? "Tempo Esgotado!" : "Decisão Incorreta!";
         feedback.innerHTML = `${motivo}<span class="correct-answer-detail">Melhor opção: <strong>${textoCorreto}</strong></span>`;
@@ -521,9 +526,8 @@
 
         if (perguntaAtual < perguntas.length) {
           document.getElementById('displayQuestion').innerText = `${perguntaAtual + 1} / ${perguntas.length}`;
-          aguardandoResposta = false; // Libera o sistema para a próxima pergunta
+          aguardandoResposta = false;
         } else {
-          // Se já passou pelas 7 perguntas, aguarda o final do vídeo ou finaliza
           aguardandoResposta = false;
         }
       }, 2000);
@@ -545,7 +549,8 @@
           body: JSON.stringify({
             nome: nomeAtleta,
             pontos: pontuacao,
-            acertos: acertos
+            acertos: acertos,
+            erros: erros
           })
         })
         .then(() => {
@@ -564,6 +569,7 @@
     function reiniciarTeste() {
       aguardandoResposta = false;
       perguntaAtual = 0;
+      erros = [];
       document.getElementById('athleteName').value = "";
       document.getElementById('savingStatus').innerText = "Enviando dados de desempenho para o treinador...";
       document.getElementById('savingStatus').style.color = "#aaa";
