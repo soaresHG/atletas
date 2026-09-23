@@ -144,7 +144,6 @@
       object-fit: contain;
     }
 
-    /* CAMADA TRANSPARENTE: Sem escurecer o vídeo */
     .overlay {
       position: absolute;
       top: 0;
@@ -244,6 +243,23 @@
     }
 
     .saving-status { font-size: 15px; color: #aaa; margin-top: 15px; }
+
+    /* Aviso de Carregamento de Vídeo */
+    .loading-banner {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 162, 255, 0.9);
+      color: white;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+      display: none;
+      z-index: 20;
+      box-shadow: 0 0 15px rgba(0, 162, 255, 0.6);
+    }
   </style>
 </head>
 <body>
@@ -276,7 +292,9 @@
     </div>
 
     <div class="game-container">
-      <video id="player" controls playsinline webkit-playsinline>
+      <div id="loadingBanner" class="loading-banner">Carregando vídeo...</div>
+      
+      <video id="player" controls playsinline webkit-playsinline preload="auto">
         <source src="https://github.com/soaresHG/atletas/releases/download/v1.0.0/atleta_avaliacao.mp4" type="video/mp4">
       </video>
 
@@ -306,52 +324,51 @@
   <script>
     const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzd3OP6iUpV_zJGOkQwjOZU0EQ8JyEo1canWwlOZBFLFJ7V_MHBd9yHtG88ymLIxT5T7A/exec";
 
-    // --- TEMPOS EM QUE AS OPÇÕES DEVEM APARECER NA TELA (EM SEGUNDOS) ---
     const perguntas = [
       {
-        gatilho: 7.10, // 07seg06
+        gatilho: 7.10,
         opcoes: [
           { texto: "Passe no pé do Gerson", correta: false },
           { texto: "Passe no espaço", correta: true }
         ]
       },
       {
-        gatilho: 37.06, // 37seg04
+        gatilho: 37.06,
         opcoes: [
           { texto: "Passe no corredor central", correta: false },
           { texto: "Passe de retorno para a defesa", correta: true }
         ]
       },
       {
-        gatilho: 64.23, // 1min04seg14
+        gatilho: 64.23,
         opcoes: [
           { texto: "Entrar como linha de 3", correta: true },
           { texto: "Jogar nas costas da 1ª linha", correta: false }
         ]
       },
       {
-        gatilho: 80.15, // 1min20seg09
+        gatilho: 80.15,
         opcoes: [
           { texto: "Ficar baixo e pisar na linha", correta: true },
           { texto: "Subir e jogar por dentro", correta: true }
         ]
       },
       {
-        gatilho: 121.20, // 2min01seg12
+        gatilho: 121.20,
         opcoes: [
           { texto: "Andar para trás e gerar linha de passe", correta: true },
           { texto: "Linha de passe no espaço das costas do marcador", correta: false }
         ]
       },
       {
-        gatilho: 133.18, // 2min13seg11
+        gatilho: 133.18,
         opcoes: [
           { texto: "Correr do meio para fora", correta: true },
           { texto: "Correr de fora para o meio", correta: false }
         ]
       },
       {
-        gatilho: 146.16, // 2min26seg10
+        gatilho: 146.16,
         opcoes: [
           { texto: "Conduz para atrair", correta: true },
           { texto: "Passe nas costas da linha", correta: true }
@@ -363,10 +380,10 @@
     let pontuacao = 0;
     let acertos = 0;
     let perguntaAtual = 0;
-    let erros = []; // Guarda os números das perguntas em que houve erro
+    let erros = [];
     const PONTOS_POR_ACERTO = 10;
 
-    const TEMPO_LIMITE = 10; // As opções duram 10s na tela
+    const TEMPO_LIMITE = 10;
     let tempoRestante = TEMPO_LIMITE;
     let timerInterval = null;
     let aguardandoResposta = false;
@@ -376,8 +393,21 @@
     const timerElement = document.getElementById('timer');
     const feedback = document.getElementById('feedback');
     const optionsContainer = document.getElementById('optionsContainer');
+    const loadingBanner = document.getElementById('loadingBanner');
 
-    // --- GERADOR DE ÁUDIO DO RELÓGIO (Web Audio API) ---
+    // Pausa o cronômetro do teste se o vídeo travar por causa da internet
+    player.addEventListener('waiting', () => {
+      loadingBanner.style.display = 'block';
+      if (timerInterval) clearInterval(timerInterval);
+    });
+
+    player.addEventListener('canplay', () => {
+      loadingBanner.style.display = 'none';
+      if (aguardandoResposta && !timerInterval && tempoRestante > 0) {
+        retomarTimer();
+      }
+    });
+
     let audioCtx = null;
 
     function initAudio() {
@@ -448,7 +478,7 @@
       player.play();
     }
 
-    // Monitora o vídeo SEM congelar a imagem
+    // Monitora o tempo e exibe a pergunta SEM pausar o vídeo
     player.addEventListener('timeupdate', () => {
       if (perguntaAtual < perguntas.length && !aguardandoResposta) {
         const pAtual = perguntas[perguntaAtual];
@@ -458,7 +488,6 @@
       }
     });
 
-    // Quando o vídeo termina
     player.addEventListener('ended', () => {
       if (perguntaAtual >= perguntas.length) {
         finalizarEEnviar();
@@ -467,6 +496,8 @@
 
     function iniciarFaseDecisao() {
       aguardandoResposta = true;
+      // O VÍDEO CONTINUA RODANDO SEM PAUSA
+      
       const q = perguntas[perguntaAtual];
 
       optionsContainer.innerHTML = "";
@@ -483,6 +514,11 @@
       timerElement.innerText = tempoRestante;
       playTickSound(tempoRestante <= 3);
 
+      retomarTimer();
+    }
+
+    function retomarTimer() {
+      if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         tempoRestante--;
         timerElement.innerText = tempoRestante;
@@ -498,6 +534,7 @@
 
     function processarResposta(isCorreta, respostaEscolhida) {
       clearInterval(timerInterval);
+      timerInterval = null;
       overlay.classList.remove('active');
       feedback.style.display = 'block';
 
@@ -512,9 +549,7 @@
         feedback.className = "feedback-banner feedback-correct";
         feedback.innerText = "Excelente Decisão!";
       } else {
-        // Registra a pergunta onde o atleta errou
         erros.push(`Pergunta ${perguntaAtual + 1}`);
-
         feedback.className = "feedback-banner feedback-wrong";
         const motivo = tempoRestante <= 0 ? "Tempo Esgotado!" : "Decisão Incorreta!";
         feedback.innerHTML = `${motivo}<span class="correct-answer-detail">Melhor opção: <strong>${textoCorreto}</strong></span>`;
